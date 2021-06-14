@@ -265,6 +265,29 @@ trait ElasticquentTrait
         return static::hydrateElasticsearchResult($result);
     }
 
+	/**
+	 * Perform a "complex" or custom search and paginate result collection.
+	 *
+	 * Using this method, a custom query can be sent to Elasticsearch.
+	 *
+	 * @param $params
+	 * @return ElasticquentResultCollection
+	 */
+	public static function complexSearchAndPaginate($params, $size = 10)
+	{
+		$instance = new static;
+
+		$page = ElasticquentPaginator::resolveCurrentPage() ?: 1;
+
+		$params["body"]["size"] = $size;
+		$params["body"]["from"] = ($page - 1) * $size;
+
+		$result = $instance->getElasticSearchClient()->search($params);
+		$collection = new ElasticquentResultCollection($result, $instance = new static);
+
+		return new ElasticquentPaginator($collection->getItems(), $collection->getHits(), $collection->totalHits(), $size, $page, ['path' => ElasticquentPaginator::resolveCurrentPath()]);
+	}
+
     /**
      * Search
      *
@@ -586,13 +609,13 @@ trait ElasticquentTrait
     public function newFromHitBuilder($hit = array())
     {
         $key_name = $this->getKeyName();
-        
+
         $attributes = $hit['_source'];
 
         if (isset($hit['_id'])) {
             $attributes[$key_name] = is_int($hit['_id']) ? intval($hit['_id']) : $hit['_id'];
         }
-        
+
         // Add fields to attributes
         if (isset($hit['fields'])) {
             foreach ($hit['fields'] as $key => $value) {
@@ -685,7 +708,7 @@ trait ElasticquentTrait
         $items = array_map(function ($item) use ($instance, $parentRelation) {
             // Convert all null relations into empty arrays
             $item = $item ?: [];
-            
+
             return static::newFromBuilderRecursive($instance, $item, $parentRelation);
         }, $items);
 
